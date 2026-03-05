@@ -352,16 +352,117 @@
         </div>
 
         <!-- 添加/编辑模板弹窗 -->
-        <div v-if="showTemplateForm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showTemplateForm = false">
-            <div class="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-                <h2 class="text-xl font-bold mb-4">{{ editingTemplate ? '编辑模板' : '添加模板' }}</h2>
-                <div class="space-y-3">
-                    <input v-model="templateForm.name" placeholder="模板名称 *" class="w-full px-3 py-2 border rounded-lg">
-                    <input v-model="templateForm.description" placeholder="描述" class="w-full px-3 py-2 border rounded-lg">
-                    <input v-model.number="templateForm.basePrice" type="number" placeholder="基础价格" class="w-full px-3 py-2 border rounded-lg">
-                    <input v-model="templateForm.category" placeholder="分类" class="w-full px-3 py-2 border rounded-lg">
+        <div v-if="showTemplateForm" class="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto">
+            <div class="bg-white rounded-xl max-w-4xl w-full my-8 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">{{ editingTemplate ? '编辑模板' : '添加模板' }}</h2>
+                    <button @click="showTemplateForm = false" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
                 </div>
-                <div class="flex gap-2 mt-4">
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 左侧：模板基本信息 -->
+                    <div class="space-y-3">
+                        <h3 class="font-semibold text-gray-600">基本信息</h3>
+                        <input v-model="templateForm.name" placeholder="模板名称 *" class="w-full px-3 py-2 border rounded-lg">
+                        <input v-model="templateForm.description" placeholder="描述" class="w-full px-3 py-2 border rounded-lg">
+                        <div class="grid grid-cols-2 gap-3">
+                            <input v-model.number="templateForm.basePrice" type="number" placeholder="基础价格" class="w-full px-3 py-2 border rounded-lg">
+                            <input v-model="templateForm.category" placeholder="分类" class="w-full px-3 py-2 border rounded-lg">
+                        </div>
+                        
+                        <!-- 配置属性列表 -->
+                        <div class="mt-6">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="font-semibold text-gray-600">配置属性</h3>
+                                <button @click="addAttribute" class="text-indigo-600 text-sm hover:underline">
+                                    <i class="fas fa-plus"></i> 添加属性
+                                </button>
+                            </div>
+                            
+                            <div v-for="(attr, idx) in templateForm.attributes" :key="idx" class="border rounded-lg p-3 mb-3 bg-gray-50">
+                                <div class="flex justify-between items-start mb-2">
+                                    <input v-model="attr.name" placeholder="属性名称" class="flex-1 px-2 py-1 border rounded text-sm mr-2">
+                                    <select v-model="attr.type" class="px-2 py-1 border rounded text-sm mr-2">
+                                        <option value="select">下拉选择</option>
+                                        <option value="number">数字</option>
+                                        <option value="boolean">开关</option>
+                                    </select>
+                                    <button @click="removeAttribute(idx)" class="text-red-500 hover:text-red-700">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-2 mb-2">
+                                    <label class="flex items-center gap-1 text-sm">
+                                        <input type="checkbox" v-model="attr.required" class="rounded"> 必填
+                                    </label>
+                                    <input v-if="attr.type === 'number'" v-model.number="attr.pricePerUnit" type="number" placeholder="单价" class="px-2 py-1 border rounded text-sm">
+                                </div>
+                                
+                                <!-- 选项配置 (for select type) -->
+                                <div v-if="attr.type === 'select'" class="mt-2">
+                                    <div class="text-xs text-gray-500 mb-1">选项配置：</div>
+                                    <div v-for="(opt, optIdx) in attr.options" :key="optIdx" class="flex gap-2 mb-1">
+                                        <input v-model="opt.value" placeholder="选项名称" class="flex-1 px-2 py-1 border rounded text-sm">
+                                        <input v-model.number="opt.price" type="number" placeholder="价格" class="w-20 px-2 py-1 border rounded text-sm">
+                                        <button @click="removeOption(attr, optIdx)" class="text-red-400 hover:text-red-600">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <button @click="addOption(attr)" class="text-xs text-indigo-600 hover:underline">+ 添加选项</button>
+                                </div>
+                                
+                                <!-- 数字类型配置 -->
+                                <div v-if="attr.type === 'number'" class="mt-2 grid grid-cols-3 gap-2">
+                                    <input v-model.number="attr.min" type="number" placeholder="最小值" class="px-2 py-1 border rounded text-sm">
+                                    <input v-model.number="attr.max" type="number" placeholder="最大值" class="px-2 py-1 border rounded text-sm">
+                                    <input v-model="attr.unit" placeholder="单位" class="px-2 py-1 border rounded text-sm">
+                                </div>
+                            </div>
+                            
+                            <div v-if="templateForm.attributes.length === 0" class="text-center text-gray-400 py-4 text-sm">
+                                暂无配置属性，点击上方添加
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧：预览 -->
+                    <div class="border rounded-lg p-4 bg-gray-50">
+                        <h3 class="font-semibold text-gray-600 mb-3">配置预览</h3>
+                        <div class="space-y-3">
+                            <div v-for="attr in templateForm.attributes" :key="attr.id || attr.name">
+                                <label class="block text-sm font-medium mb-1">
+                                    {{ attr.name }} <span v-if="attr.required" class="text-red-500">*</span>
+                                </label>
+                                
+                                <select v-if="attr.type === 'select'" class="w-full px-3 py-2 border rounded-lg text-sm">
+                                    <option value="">请选择 {{ attr.name }}</option>
+                                    <option v-for="opt in attr.options" :key="opt.value" :value="opt.value">
+                                        {{ opt.value }} <span v-if="opt.price !== 0">({{ opt.price > 0 ? '+' : '' }}{{ opt.price }})</span>
+                                    </option>
+                                </select>
+                                
+                                <div v-else-if="attr.type === 'number'" class="flex gap-2">
+                                    <input type="number" :min="attr.min" :max="attr.max" class="flex-1 px-3 py-2 border rounded-lg text-sm">
+                                    <span v-if="attr.unit" class="flex items-center text-gray-400">{{ attr.unit }}</span>
+                                </div>
+                                
+                                <label v-else-if="attr.type === 'boolean'" class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="w-5 h-5 text-indigo-600 rounded">
+                                    <span>启用</span>
+                                </label>
+                            </div>
+                            
+                            <div v-if="templateForm.attributes.length === 0" class="text-center text-gray-400 py-8">
+                                添加属性后显示预览
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 mt-6">
                     <button @click="showTemplateForm = false" class="flex-1 border py-2 rounded-lg">取消</button>
                     <button @click="saveTemplate" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg">{{ editingTemplate ? '保存' : '添加' }}</button>
                 </div>
@@ -473,7 +574,7 @@ createApp({
             customerForm: { name: '', company: '', email: '', phone: '', address: '' },
             showTemplateForm: false,
             editingTemplate: null,
-            templateForm: { name: '', description: '', basePrice: 0, category: '' },
+            templateForm: { name: '', description: '', basePrice: 0, category: '', attributes: [] },
             toasts: []
         }
     },
@@ -584,8 +685,33 @@ createApp({
         },
         editTemplate(tpl) {
             this.editingTemplate = tpl;
-            this.templateForm = { name: tpl.name, description: tpl.description, basePrice: tpl.basePrice, category: tpl.category };
+            // Deep copy attributes
+            const attrs = (tpl.attributes || []).map(a => ({...a, options: a.options ? [...a.options.map(o => ({...o}))] : []}));
+            this.templateForm = { name: tpl.name, description: tpl.description, basePrice: tpl.basePrice, category: tpl.category, attributes: attrs };
             this.showTemplateForm = true;
+        },
+        addAttribute() {
+            this.templateForm.attributes.push({
+                id: 'attr_' + Date.now(),
+                name: '',
+                type: 'select',
+                required: false,
+                options: [{value: '选项1', price: 0}],
+                pricePerUnit: 0,
+                min: 0,
+                max: 100,
+                unit: ''
+            });
+        },
+        removeAttribute(idx) {
+            this.templateForm.attributes.splice(idx, 1);
+        },
+        addOption(attr) {
+            if (!attr.options) attr.options = [];
+            attr.options.push({value: '新选项', price: 0});
+        },
+        removeOption(attr, idx) {
+            attr.options.splice(idx, 1);
         },
         async deleteTemplate(id) {
             if (!confirm('确定要删除这个模板吗？')) return;
@@ -605,7 +731,7 @@ createApp({
             if (res.ok) {
                 this.showToast(this.editingTemplate ? '模板已更新' : '模板已添加', 'success');
                 this.showTemplateForm = false;
-                this.templateForm = { name: '', description: '', basePrice: 0, category: '' };
+                this.templateForm = { name: '', description: '', basePrice: 0, category: '', attributes: [] };
                 this.editingTemplate = null;
                 this.loadTemplates();
                 this.loadStats();
