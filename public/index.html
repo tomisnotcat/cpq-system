@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPQ 报价系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    :root { --primary: #4f46e5; }
+    .dark { background: #1a1a2e !important; color: #eee !important }
+    .dark .bg-white { background: #16213e !important; color: #eee }
+    .dark input, .dark select { background: #2a2a4a; color: #eee; border-color: #444 }
+    .product-card { transition: transform 0.2s, box-shadow 0.2s; }
+    .product-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+    .toast { padding: 12px 20px; border-radius: 8px; color: white; margin-bottom: 10px; animation: slideIn 0.3s ease; }
+    .toast-success { background: #10b981; }
+    .toast-error { background: #ef4444; }
+    .toast-info { background: #3b82f6; }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div id="app">
+    <!-- Toast -->
+    <div class="toast-container">
+        <div v-for="toast in toasts" :key="toast.id" :class="['toast', 'toast-' + toast.type]">
+            {{ toast.message }}
+        </div>
+    </div>
+
+    <!-- 导航 -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <h1 class="text-xl font-bold text-indigo-600"><i class="fas fa-calculator"></i> CPQ 报价系统</h1>
+            <div class="flex gap-4">
+                <button @click="currentView = 'templates'" :class="currentView === 'templates' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
+                    <i class="fas fa-cube"></i> 产品配置
+                </button>
+                <button @click="currentView = 'quotes'" :class="currentView === 'quotes' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
+                    <i class="fas fa-file-invoice"></i> 报价单
+                </button>
+                <button @click="currentView = 'customers'" :class="currentView === 'customers' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
+                    <i class="fas fa-users"></i> 客户
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- 产品模板列表 -->
+        <div v-if="currentView === 'templates'">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">产品配置</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div v-for="tpl in templates" :key="tpl.id" class="product-card bg-white rounded-xl shadow-sm p-6 cursor-pointer" @click="selectTemplate(tpl)">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold">{{ tpl.name }}</h3>
+                            <p class="text-gray-500 text-sm mt-1">{{ tpl.description }}</p>
+                        </div>
+                        <span class="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded">{{ tpl.category }}</span>
+                    </div>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="text-2xl font-bold text-indigo-600">¥{{ tpl.basePrice }}</span>
+                        <span class="text-gray-400 text-sm">基础价格</span>
+                    </div>
+                    <div class="mt-3 text-sm text-gray-400">
+                        {{ tpl.attributes.length }} 个可配置项
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 配置报价 -->
+        <div v-if="selectedTemplate" class="fade-in">
+            <button @click="selectedTemplate = null" class="mb-4 text-indigo-600 hover:underline">
+                <i class="fas fa-arrow-left"></i> 返回产品列表
+            </button>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 配置表单 -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-xl font-bold mb-4">{{ selectedTemplate.name }}</h2>
+                    
+                    <div v-for="attr in selectedTemplate.attributes" :key="attr.id" class="mb-4">
+                        <label class="block text-sm font-medium mb-1">
+                            {{ attr.name }}
+                            <span v-if="attr.required" class="text-red-500">*</span>
+                        </label>
+                        
+                        <!-- Select -->
+                        <select v-if="attr.type === 'select'" v-model="config[attr.id]" class="w-full px-3 py-2 border rounded-lg">
+                            <option value="">请选择 {{ attr.name }}</option>
+                            <option v-for="opt in attr.options" :key="opt.value" :value="opt.value">
+                                {{ opt.value }} <span v-if="opt.price !== 0">({{ opt.price > 0 ? '+' : '' }}¥{{ opt.price }})</span>
+                            </option>
+                        </select>
+                        
+                        <!-- Number -->
+                        <div v-else-if="attr.type === 'number'" class="flex gap-2">
+                            <input type="number" v-model.number="config[attr.id]" :min="attr.min || 1" :max="attr.max" class="flex-1 px-3 py-2 border rounded-lg">
+                            <span v-if="attr.unit" class="flex items-center text-gray-400">{{ attr.unit }}</span>
+                            <span v-if="attr.pricePerUnit" class="text-sm text-gray-400 flex items-center">
+                                ¥{{ attr.pricePerUnit }}/{{ attr.unit }}
+                            </span>
+                        </div>
+                        
+                        <!-- Boolean -->
+                        <label v-else-if="attr.type === 'boolean'" class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" v-model="config[attr.id]" class="w-5 h-5 text-indigo-600 rounded">
+                            <span>启用 ({{ attr.price > 0 ? '+¥' : '' }}{{ attr.price || 0 }})</span>
+                        </label>
+                    </div>
+
+                    <button @click="calculatePrice" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold mt-4 hover:bg-indigo-700">
+                        计算价格
+                    </button>
+                </div>
+
+                <!-- 价格计算结果 -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-xl font-bold mb-4">价格明细</h2>
+                    
+                    <div v-if="calculationResult" class="space-y-3">
+                        <div class="flex justify-between text-gray-600">
+                            <span>基础价格</span>
+                            <span>¥{{ calculationResult.basePrice }}</span>
+                        </div>
+                        
+                        <div v-for="item in calculationResult.config" :key="item.attribute" class="flex justify-between text-sm">
+                            <span class="text-gray-500">{{ item.attribute }}: {{ item.value }}</span>
+                            <span :class="item.price > 0 ? 'text-green-600' : 'text-red-500'">
+                                {{ item.price > 0 ? '+' : '' }}¥{{ item.price }}
+                            </span>
+                        </div>
+                        
+                        <div class="border-t pt-3 flex justify-between text-xl font-bold">
+                            <span>总价</span>
+                            <span class="text-indigo-600">¥{{ calculationResult.totalPrice }}</span>
+                        </div>
+
+                        <hr class="my-4">
+                        
+                        <!-- 生成报价单 -->
+                        <div class="space-y-3">
+                            <h3 class="font-semibold">生成报价单</h3>
+                            <input v-model="quoteCustomerName" placeholder="客户名称" class="w-full px-3 py-2 border rounded-lg">
+                            <input v-model="quoteValidDays" type="number" placeholder="有效期(天)" class="w-full px-3 py-2 border rounded-lg">
+                            <textarea v-model="quoteNotes" placeholder="备注" rows="2" class="w-full px-3 py-2 border rounded-lg"></textarea>
+                            <button @click="createQuote" :disabled="!calculationResult.totalPrice" class="w-full bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50">
+                                生成报价单
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div v-else class="text-center text-gray-400 py-12">
+                        <i class="fas fa-calculator text-4xl mb-4"></i>
+                        <p>请配置产品参数后计算价格</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 报价单列表 -->
+        <div v-if="currentView === 'quotes'">
+            <h2 class="text-2xl font-bold mb-6">报价单</h2>
+            
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-medium">编号</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium">产品</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium">客户</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium">金额</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium">状态</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium">日期</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="q in quotes" :key="q.id" class="border-t hover:bg-gray-50">
+                            <td class="px-4 py-3">#{{ q.id }}</td>
+                            <td class="px-4 py-3">{{ q.templateName || getTemplateName(q.templateId) }}</td>
+                            <td class="px-4 py-3">{{ q.customerName || '-' }}</td>
+                            <td class="px-4 py-3 font-bold text-indigo-600">¥{{ q.totalPrice }}</td>
+                            <td class="px-4 py-3">
+                                <span :class="statusClass(q.status)" class="px-2 py-1 rounded text-xs">
+                                    {{ statusText(q.status) }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(q.created_at) }}</td>
+                            <td class="px-4 py-3">
+                                <button @click="viewQuote(q)" class="text-indigo-600 hover:underline mr-2">查看</button>
+                                <button v-if="q.status === 'draft'" @click="sendQuote(q)" class="text-green-600 hover:underline">发送</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="quotes.length === 0" class="text-center py-12 text-gray-400">
+                    暂无报价单
+                </div>
+            </div>
+        </div>
+
+        <!-- 客户管理 -->
+        <div v-if="currentView === 'customers'">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">客户管理</h2>
+                <button @click="showCustomerForm = true" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">
+                    <i class="fas fa-plus"></i> 添加客户
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div v-for="c in customers" :key="c.id" class="bg-white rounded-xl shadow-sm p-4">
+                    <h3 class="font-semibold">{{ c.name }}</h3>
+                    <p class="text-gray-500 text-sm">{{ c.company }}</p>
+                    <p class="text-gray-400 text-sm mt-2">{{ c.email }}</p>
+                    <p class="text-gray-400 text-sm">{{ c.phone }}</p>
+                </div>
+            </div>
+            <div v-if="customers.length === 0" class="text-center py-12 text-gray-400">
+                暂无客户
+            </div>
+        </div>
+
+        <!-- 报价单详情弹窗 -->
+        <div v-if="showQuoteDetail" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showQuoteDetail = false">
+            <div class="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold">报价单 #{{ selectedQuote.id }}</h2>
+                        <p class="text-gray-500">{{ selectedQuote.template?.name }}</p>
+                    </div>
+                    <button @click="showQuoteDetail = false" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="text-sm text-gray-500">客户</label>
+                        <p class="font-medium">{{ selectedQuote.customerName || '-' }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">有效期至</label>
+                        <p class="font-medium">{{ formatDate(selectedQuote.expires_at) }}</p>
+                    </div>
+                </div>
+                
+                <div class="border-t pt-4">
+                    <h3 class="font-semibold mb-3">配置明细</h3>
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-2 py-2 text-left">项目</th>
+                                <th class="px-2 py-2 text-left">选择</th>
+                                <th class="px-2 py-2 text-right">价格</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in selectedQuote.configDetails" :key="item.attribute" class="border-t">
+                                <td class="px-2 py-2">{{ item.attribute }}</td>
+                                <td class="px-2 py-2">{{ item.value }}</td>
+                                <td class="px-2 py-2 text-right">{{ item.price > 0 ? '+' : '' }}¥{{ item.price }}</td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="font-bold">
+                            <tr class="border-t">
+                                <td colspan="2" class="px-2 py-2">合计</td>
+                                <td class="px-2 py-2 text-right text-indigo-600">¥{{ selectedQuote.totalPrice }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <div v-if="selectedQuote.notes" class="mt-4">
+                    <label class="text-sm text-gray-500">备注</label>
+                    <p class="mt-1">{{ selectedQuote.notes }}</p>
+                </div>
+                
+                <div class="mt-6 flex gap-2">
+                    <button v-if="selectedQuote.status === 'draft'" @click="updateQuoteStatus(selectedQuote, 'sent')" class="flex-1 bg-blue-600 text-white py-2 rounded-lg">标记已发送</button>
+                    <button v-if="selectedQuote.status === 'sent'" @click="updateQuoteStatus(selectedQuote, 'accepted')" class="flex-1 bg-green-600 text-white py-2 rounded-lg">接受</button>
+                    <button v-if="selectedQuote.status === 'sent'" @click="updateQuoteStatus(selectedQuote, 'rejected')" class="flex-1 bg-red-600 text-white py-2 rounded-lg">拒绝</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 添加客户弹窗 -->
+        <div v-if="showCustomerForm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showCustomerForm = false">
+            <div class="bg-white rounded-xl max-w-md w-full p-6">
+                <h2 class="text-xl font-bold mb-4">添加客户</h2>
+                <div class="space-y-3">
+                    <input v-model="customerForm.name" placeholder="姓名 *" class="w-full px-3 py-2 border rounded-lg">
+                    <input v-model="customerForm.company" placeholder="公司" class="w-full px-3 py-2 border rounded-lg">
+                    <input v-model="customerForm.email" placeholder="邮箱" class="w-full px-3 py-2 border rounded-lg">
+                    <input v-model="customerForm.phone" placeholder="电话" class="w-full px-3 py-2 border rounded-lg">
+                    <input v-model="customerForm.address" placeholder="地址" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button @click="showCustomerForm = false" class="flex-1 border py-2 rounded-lg">取消</button>
+                    <button @click="addCustomer" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg">保存</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+const { createApp } = Vue;
+createApp({
+    data() {
+        return {
+            currentView: 'templates',
+            templates: [],
+            quotes: [],
+            customers: [],
+            selectedTemplate: null,
+            config: {},
+            calculationResult: null,
+            quoteCustomerName: '',
+            quoteValidDays: 30,
+            quoteNotes: '',
+            showQuoteDetail: false,
+            selectedQuote: null,
+            showCustomerForm: false,
+            customerForm: { name: '', company: '', email: '', phone: '', address: '' },
+            toasts: []
+        }
+    },
+    mounted() {
+        this.loadTemplates();
+        this.loadQuotes();
+        this.loadCustomers();
+    },
+    methods: {
+        showToast(msg, type = 'info') {
+            const id = Date.now();
+            this.toasts.push({ id, message: msg, type });
+            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 3000);
+        },
+        async loadTemplates() {
+            this.templates = await (await fetch('/api/templates')).json();
+        },
+        async loadQuotes() {
+            this.quotes = await (await fetch('/api/quotes')).json();
+        },
+        async loadCustomers() {
+            this.customers = await (await fetch('/api/customers')).json();
+        },
+        selectTemplate(tpl) {
+            this.selectedTemplate = tpl;
+            this.config = {};
+            this.calculationResult = null;
+            this.quoteCustomerName = '';
+            this.quoteNotes = '';
+        },
+        async calculatePrice() {
+            const res = await fetch('/api/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ templateId: this.selectedTemplate.id, config: this.config })
+            });
+            if (res.ok) {
+                this.calculationResult = await res.json();
+            } else {
+                const err = await res.json();
+                this.showToast(err.error, 'error');
+            }
+        },
+        async createQuote() {
+            const res = await fetch('/api/quotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    templateId: this.selectedTemplate.id,
+                    config: this.config,
+                    customerName: this.quoteCustomerName,
+                    validDays: this.quoteValidDays,
+                    notes: this.quoteNotes
+                })
+            });
+            if (res.ok) {
+                this.showToast('报价单创建成功！', 'success');
+                this.selectedTemplate = null;
+                this.loadQuotes();
+            } else {
+                const err = await res.json();
+                this.showToast(err.error, 'error');
+            }
+        },
+        viewQuote(q) {
+            this.selectedQuote = q;
+            this.showQuoteDetail = true;
+        },
+        async updateQuoteStatus(q, status) {
+            const res = await fetch(`/api/quotes/${q.id}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            if (res.ok) {
+                q.status = status;
+                this.showToast('状态已更新', 'success');
+            }
+        },
+        sendQuote(q) {
+            this.updateQuoteStatus(q, 'sent');
+        },
+        getTemplateName(id) {
+            const tpl = this.templates.find(t => t.id === id);
+            return tpl ? tpl.name : '未知产品';
+        },
+        async addCustomer() {
+            if (!this.customerForm.name) {
+                this.showToast('请输入客户名称', 'error');
+                return;
+            }
+            const res = await fetch('/api/customers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.customerForm)
+            });
+            if (res.ok) {
+                this.showToast('客户添加成功', 'success');
+                this.showCustomerForm = false;
+                this.customerForm = { name: '', company: '', email: '', phone: '', address: '' };
+                this.loadCustomers();
+            }
+        },
+        statusClass(status) {
+            const classes = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-600', accepted: 'bg-green-100 text-green-600', rejected: 'bg-red-100 text-red-600' };
+            return classes[status] || '';
+        },
+        statusText(status) {
+            const texts = { draft: '草稿', sent: '已发送', accepted: '已接受', rejected: '已拒绝' };
+            return texts[status] || status;
+        },
+        formatDate(d) {
+            if (!d) return '-';
+            return new Date(d).toLocaleDateString('zh-CN');
+        }
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
