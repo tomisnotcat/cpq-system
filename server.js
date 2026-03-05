@@ -19,6 +19,8 @@ let redis = null;
 let useRedis = false;
 
 async function initRedis() {
+  console.log('UPSTASH_REDIS_REST_URL:', process.env.UPSTASH_REDIS_REST_URL ? 'set' : 'not set');
+  console.log('UPSTASH_REDIS_REST_TOKEN:', process.env.UPSTASH_REDIS_REST_TOKEN ? 'set' : 'not set');
   if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
     try {
       const { Redis } = require('@upstash/redis');
