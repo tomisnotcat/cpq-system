@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CPQ 报价系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
     :root { --primary: #4f46e5; }
@@ -37,7 +39,7 @@
     <nav class="bg-white shadow-sm sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
             <h1 class="text-xl font-bold text-indigo-600"><i class="fas fa-calculator"></i> CPQ 报价系统</h1>
-            <div class="flex gap-4">
+            <div class="flex gap-4 items-center">
                 <button @click="currentView = 'templates'" :class="currentView === 'templates' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
                     <i class="fas fa-cube"></i> 产品配置
                 </button>
@@ -50,9 +52,32 @@
                 <button @click="currentView = 'admin'" :class="currentView === 'admin' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
                     <i class="fas fa-cog"></i> 管理
                 </button>
+                <template v-if="currentUser">
+                    <span class="text-sm text-gray-500">{{ currentUser.name || currentUser.username }}</span>
+                    <button @click="logout" class="text-red-500 hover:text-red-700 text-sm">退出</button>
+                </template>
+                <template v-else>
+                    <button @click="showLogin = true" class="bg-indigo-600 text-white px-3 py-1 rounded text-sm">登录</button>
+                </template>
             </div>
         </div>
     </nav>
+
+    <!-- 登录弹窗 -->
+    <div v-if="showLogin" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showLogin = false">
+        <div class="bg-white rounded-xl max-w-sm w-full p-6">
+            <h2 class="text-xl font-bold mb-4">{{ isRegister ? '注册' : '登录' }}</h2>
+            <div class="space-y-3">
+                <input v-model="loginForm.username" placeholder="用户名" class="w-full px-3 py-2 border rounded-lg">
+                <input v-model="loginForm.password" type="password" placeholder="密码" class="w-full px-3 py-2 border rounded-lg" @keyup.enter="login">
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button @click="login" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg">{{ isRegister ? '注册' : '登录' }}</button>
+                <button @click="isRegister = !isRegister" class="px-3 py-2 text-indigo-600">{{ isRegister ? '登录' : '注册' }}</button>
+            </div>
+            <button @click="showLogin = false" class="mt-3 w-full text-center text-gray-500 text-sm">取消</button>
+        </div>
+    </div>
 
     <main class="max-w-7xl mx-auto px-4 py-6">
         <!-- 产品模板列表 -->
@@ -271,6 +296,18 @@
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <div class="text-gray-500 text-sm">报价总金额</div>
                     <div class="text-3xl font-bold text-orange-600">¥{{ stats.totalQuoteValue.toLocaleString() }}</div>
+                </div>
+            </div>
+
+            <!-- 图表 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold mb-4">报价单状态</h3>
+                    <canvas id="statusChart" height="200"></canvas>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold mb-4">月度报价趋势</h3>
+                    <canvas id="trendChart" height="200"></canvas>
                 </div>
             </div>
 
@@ -623,7 +660,11 @@ createApp({
             showTemplateForm: false,
             editingTemplate: null,
             templateForm: { name: '', description: '', basePrice: 0, category: '', attributes: [] },
-            toasts: []
+            toasts: [],
+            currentUser: null,
+            showLogin: false,
+            loginForm: { username: '', password: '' },
+            isRegister: false
         }
     },
     computed: {
@@ -653,16 +694,45 @@ createApp({
         }
     },
     mounted() {
+        // Check for logged in user
+        const savedUser = localStorage.getItem('cpq_user');
+        if (savedUser) {
+            this.currentUser = JSON.parse(savedUser);
+        }
         this.loadTemplates();
         this.loadQuotes();
         this.loadCustomers();
         this.loadStats();
+        this.$nextTick(() => this.initCharts());
     },
     methods: {
         showToast(msg, type = 'info') {
             const id = Date.now();
             this.toasts.push({ id, message: msg, type });
             setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 3000);
+        },
+        async login() {
+            const endpoint = this.isRegister ? '/api/register' : '/api/login';
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.loginForm)
+            });
+            if (res.ok) {
+                this.currentUser = await res.json();
+                localStorage.setItem('cpq_user', JSON.stringify(this.currentUser));
+                this.showLogin = false;
+                this.loginForm = { username: '', password: '' };
+                this.showToast(this.isRegister ? '注册成功！' : '登录成功！', 'success');
+            } else {
+                const err = await res.json();
+                this.showToast(err.error, 'error');
+            }
+        },
+        logout() {
+            this.currentUser = null;
+            localStorage.removeItem('cpq_user');
+            this.showToast('已退出登录', 'info');
         },
         async loadTemplates() {
             this.templates = await (await fetch('/api/templates')).json();
@@ -675,6 +745,68 @@ createApp({
         },
         async loadStats() {
             this.stats = await (await fetch('/api/stats')).json();
+            this.initCharts();
+            this.$nextTick(() => this.updateCharts());
+        },
+        initCharts() {
+            // Status pie chart
+            const statusCtx = document.getElementById('statusChart');
+            if (statusCtx) {
+                this.statusChart = new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['草稿', '已发送', '已接受', '已拒绝'],
+                        datasets: [{
+                            data: [0, 0, 0, 0],
+                            backgroundColor: ['#6b7280', '#3b82f6', '#10b981', '#ef4444']
+                        }]
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                });
+            }
+            
+            // Trend line chart
+            const trendCtx = document.getElementById('trendChart');
+            if (trendCtx) {
+                this.trendChart = new Chart(trendCtx, {
+                    type: 'line',
+                    data: {
+                        labels: ['1月', '2月', '3月', '4月', '5月', '6月'],
+                        datasets: [{
+                            label: '报价数量',
+                            data: [0, 0, 0, 0, 0, 0],
+                            borderColor: '#4f46e5',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: { 
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+        },
+        updateCharts() {
+            if (this.statusChart) {
+                this.statusChart.data.datasets[0].data = [
+                    this.stats.quotesByStatus?.draft || 0,
+                    this.stats.quotesByStatus?.sent || 0,
+                    this.stats.quotesByStatus?.accepted || 0,
+                    this.stats.quotesByStatus?.rejected || 0
+                ];
+                this.statusChart.update();
+            }
+            if (this.trendChart) {
+                // Simulated trend data
+                const month = new Date().getMonth();
+                const trendData = Array(6).fill(0);
+                trendData[month] = this.stats.quotes || 0;
+                this.trendChart.data.datasets[0].data = trendData;
+                this.trendChart.update();
+            }
         },
         selectTemplate(tpl) {
             this.selectedTemplate = tpl;
@@ -817,13 +949,6 @@ createApp({
             }
         },
         exportPDF() {
-            // Create a printable window
-            const content = document.getElementById('quote-detail-content');
-            if (!content) {
-                this.showToast('无法生成PDF', 'error');
-                return;
-            }
-            
             const quote = this.selectedQuote;
             const html = `
 <!DOCTYPE html>
@@ -832,68 +957,101 @@ createApp({
     <meta charset="UTF-8">
     <title>报价单 #${quote.id}</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-        h1 { color: #4f46e5; border-bottom: 2px solid #4f46e5; padding-bottom: 10px; }
-        .info { display: flex; justify-content: space-between; margin: 20px 0; }
-        .info-item { }
-        .info-label { color: #666; font-size: 12px; }
-        .info-value { font-size: 16px; font-weight: bold; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #4f46e5; }
+        .logo { font-size: 28px; font-weight: bold; color: #4f46e5; }
+        .quote-title { font-size: 14px; color: #666; }
+        .quote-num { font-size: 24px; font-weight: bold; color: #333; }
+        .info-section { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .info-box { background: #f8f9fa; padding: 15px 20px; border-radius: 8px; flex: 1; margin-right: 15px; }
+        .info-box:last-child { margin-right: 0; }
+        .info-label { font-size: 12px; color: #666; margin-bottom: 5px; }
+        .info-value { font-size: 16px; font-weight: bold; color: #333; }
+        .product-name { font-size: 20px; font-weight: bold; color: #4f46e5; margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background: #f5f5f5; }
-        .total { font-size: 24px; font-weight: bold; text-align: right; color: #4f46e5; }
-        .notes { margin-top: 20px; padding: 15px; background: #f9f9f9; }
-        .footer { margin-top: 40px; text-align: center; color: #999; font-size: 12px; }
+        th { background: #4f46e5; color: white; padding: 12px 15px; text-align: left; font-weight: 500; }
+        td { border: 1px solid #e5e7eb; padding: 12px 15px; }
+        tr:nth-child(even) { background: #f9fafb; }
+        .price-col { text-align: right; }
+        .total-row { background: #4f46e5 !important; color: white; }
+        .total-label { font-weight: bold; }
+        .total-value { font-size: 24px; font-weight: bold; }
+        .notes { margin-top: 30px; padding: 20px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b; }
+        .notes-title { font-weight: bold; margin-bottom: 10px; color: #92400e; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; color: #666; font-size: 12px; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .status-draft { background: #e5e7eb; color: #666; }
+        .status-sent { background: #dbeafe; color: #2563eb; }
+        .status-accepted { background: #d1fae5; color: #059669; }
+        .status-rejected { background: #fee2e2; color: #dc2626; }
+        @media print { body { padding: 20px; } }
     </style>
 </head>
 <body>
-    <h1>报价单 #${quote.id}</h1>
-    <p style="color: #666;">${quote.template?.name || ''}</p>
+    <div class="header">
+        <div>
+            <div class="logo">📊 CPQ 报价系统</div>
+            <div class="quote-title">专业报价解决方案</div>
+        </div>
+        <div style="text-align: right;">
+            <div class="quote-num">报价单 #${quote.id}</div>
+            <span class="status-badge status-${quote.status}">${this.statusText(quote.status)}</span>
+        </div>
+    </div>
     
-    <div class="info">
-        <div class="info-item">
-            <div class="info-label">客户</div>
+    <div class="product-name">${quote.template?.name || '产品配置'}</div>
+    
+    <div class="info-section">
+        <div class="info-box">
+            <div class="info-label">客户名称</div>
             <div class="info-value">${quote.customerName || '-'}</div>
         </div>
-        <div class="info-item">
+        <div class="info-box">
+            <div class="info-label">报价日期</div>
+            <div class="info-value">${this.formatDate(quote.created_at)}</div>
+        </div>
+        <div class="info-box">
             <div class="info-label">有效期至</div>
             <div class="info-value">${this.formatDate(quote.expires_at)}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">创建时间</div>
-            <div class="info-value">${this.formatDate(quote.created_at)}</div>
         </div>
     </div>
     
     <table>
         <thead>
             <tr>
-                <th>项目</th>
+                <th>序号</th>
+                <th>配置项目</th>
                 <th>选择</th>
-                <th style="text-align: right;">价格</th>
+                <th class="price-col">金额</th>
             </tr>
         </thead>
         <tbody>
-            ${(quote.configDetails || []).map(item => `
+            ${(quote.configDetails || []).map((item, idx) => `
             <tr>
+                <td>${idx + 1}</td>
                 <td>${item.attribute}</td>
                 <td>${item.value}</td>
-                <td style="text-align: right;">${item.price > 0 ? '+' : ''}¥${item.price}</td>
+                <td class="price-col">${item.price > 0 ? '+' : ''}¥${item.price.toLocaleString()}</td>
             </tr>
             `).join('')}
-        </tbody>
-        <tfoot>
-            <tr>
-                <td colspan="2" style="text-align: right; font-weight: bold;">合计</td>
-                <td style="text-align: right; font-weight: bold; color: #4f46e5; font-size: 18px;">¥${quote.totalPrice}</td>
+            <tr class="total-row">
+                <td colspan="3" class="total-label">合计金额</td>
+                <td class="price-col total-value">¥${quote.totalPrice.toLocaleString()}</td>
             </tr>
-        </tfoot>
+        </tbody>
     </table>
     
-    ${quote.notes ? `<div class="notes"><strong>备注：</strong>${quote.notes}</div>` : ''}
+    ${quote.notes ? `
+    <div class="notes">
+        <div class="notes-title">备注说明</div>
+        <div>${quote.notes}</div>
+    </div>
+    ` : ''}
     
     <div class="footer">
-        <p>CPQ 报价系统 | ${new Date().toLocaleDateString('zh-CN')}</p>
+        <div>如有任何疑问，请联系我们</div>
+        <div>生成时间: ${new Date().toLocaleString('zh-CN')}</div>
     </div>
 </body>
 </html>`;

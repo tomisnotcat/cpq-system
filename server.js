@@ -186,10 +186,16 @@ function generateDefaultData() {
     { id: 1, name: '演示客户', company: '示例公司', email: 'demo@cpq.com', phone: '13800138000', address: '北京市', created_at: new Date().toISOString() }
   ];
 
+  // 用户
+  const users = [
+    { id: 1, username: 'admin', password: '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.hxBV7H1M5Fzp.xJ5Fy', role: 'admin', name: '管理员', email: 'admin@cpq.com', created_at: new Date().toISOString() },
+    { id: 2, username: 'user', password: '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.hxBV7H1M5Fzp.xJ5Fy', role: 'user', name: '普通用户', email: 'user@cpq.com', created_at: new Date().toISOString() }
+  ];
+
   // 报价单
   const quotes = [];
 
-  return { productTemplates, customers, quotes, nextIds: { template: 5, customer: 2, quote: 1 } };
+  return { productTemplates, customers, users, quotes, nextIds: { template: 5, customer: 2, user: 3, quote: 1 } };
 }
 
 let db = generateDefaultData();
@@ -582,6 +588,69 @@ async function calculatePrice(templateId, config) {
 }
 
 // ==================== 统计 API ====================
+
+app.get('/api/stats', (req, res) => {
+
+// 登录
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = db.users.find(u => u.username === username);
+    if (!user) return res.status(401).json({ error: '用户名或密码错误' });
+    
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ error: '用户名或密码错误' });
+    
+    res.json({ 
+      id: user.id, 
+      username: user.username, 
+      name: user.name, 
+      role: user.role,
+      email: user.email 
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 注册
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, password, name, email } = req.body;
+    if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+    
+    if (db.users.find(u => u.username === username)) {
+      return res.status(400).json({ error: '用户名已存在' });
+    }
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = {
+      id: db.nextIds.user++,
+      username,
+      password: hashedPassword,
+      role: 'user',
+      name: name || username,
+      email: email || '',
+      created_at: new Date().toISOString()
+    };
+    db.users.push(user);
+    await saveToRedis();
+    res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 获取当前用户信息
+app.get('/api/me', (req, res) => {
+  const username = req.headers['x-username'];
+  if (!username) return res.status(401).json({ error: '未登录' });
+  
+  const user = db.users.find(u => u.username === username);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+  
+  res.json({ id: user.id, username: user.username, name: user.name, role: user.role, email: user.email });
+});
 
 app.get('/api/stats', (req, res) => {
   res.json({
