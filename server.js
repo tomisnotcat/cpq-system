@@ -202,20 +202,22 @@ function generateDefaultData() {
 
 let db = generateDefaultData();
 
-// 初始化
+// 尝试加载 Redis，如果失败则使用默认数据
 initRedis().then(() => {
   loadFromRedis().then(savedDb => {
     if (savedDb) {
       // 确保数据结构完整
-      if (!savedDb.productTemplates) savedDb.productTemplates = [];
-      if (!savedDb.customers) savedDb.customers = [];
-      if (!savedDb.users) savedDb.users = [];
-      if (!savedDb.quotes) savedDb.quotes = [];
-      if (!savedDb.nextIds) savedDb.nextIds = { template: 1, customer: 1, user: 1, quote: 1 };
+      if (!savedDb.productTemplates) savedDb.productTemplates = db.productTemplates;
+      if (!savedDb.customers) savedDb.customers = db.customers;
+      if (!savedDb.users) savedDb.users = db.users;
+      if (!savedDb.quotes) savedDb.quotes = db.quotes;
+      if (!savedDb.nextIds) savedDb.nextIds = db.nextIds;
       db = savedDb;
       console.log('Loaded data from Redis');
     }
   });
+}).catch(err => {
+  console.log('Redis init failed, using default data:', err.message);
 });
 
 setInterval(() => { if (useRedis) saveToRedis(); }, 30000);
