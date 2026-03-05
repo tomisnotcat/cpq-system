@@ -448,6 +448,42 @@ app.put('/api/quotes/:id/status', async (req, res) => {
   res.json(quote);
 });
 
+// 更新报价单
+app.put('/api/quotes/:id', async (req, res) => {
+  const { customerName, validDays, notes, config } = req.body;
+  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
+  if (!quote) return res.status(404).json({ error: '报价单不存在' });
+  
+  if (customerName !== undefined) quote.customerName = customerName;
+  if (validDays !== undefined) {
+    quote.validDays = validDays;
+    quote.expires_at = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString();
+  }
+  if (notes !== undefined) quote.notes = notes;
+  if (config) {
+    quote.config = config;
+    // 重新计算价格
+    const { totalPrice, configDetails } = await calculatePrice(quote.templateId, config);
+    quote.totalPrice = totalPrice;
+    quote.configDetails = configDetails;
+  }
+  
+  quote.updated_at = new Date().toISOString();
+  await saveToRedis();
+  
+  res.json(quote);
+});
+
+// 删除报价单
+app.delete('/api/quotes/:id', async (req, res) => {
+  const idx = db.quotes.findIndex(q => q.id === parseInt(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: '报价单不存在' });
+  
+  db.quotes.splice(idx, 1);
+  await saveToRedis();
+  res.json({ success: true });
+});
+
 // 辅助函数：计算价格
 async function calculatePrice(templateId, config) {
   const template = db.productTemplates.find(t => t.id === templateId);
