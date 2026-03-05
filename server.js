@@ -204,6 +204,12 @@ let db = generateDefaultData();
 initRedis().then(() => {
   loadFromRedis().then(savedDb => {
     if (savedDb) {
+      // 确保数据结构完整
+      if (!savedDb.productTemplates) savedDb.productTemplates = [];
+      if (!savedDb.customers) savedDb.customers = [];
+      if (!savedDb.users) savedDb.users = [];
+      if (!savedDb.quotes) savedDb.quotes = [];
+      if (!savedDb.nextIds) savedDb.nextIds = { template: 1, customer: 1, user: 1, quote: 1 };
       db = savedDb;
       console.log('Loaded data from Redis');
     }
