@@ -243,6 +243,21 @@ app.post('/api/templates', async (req, res) => {
   }
 });
 
+// 删除产品模板
+app.delete('/api/templates/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const idx = db.productTemplates.findIndex(t => t.id === id);
+    if (idx === -1) return res.status(404).json({ error: '模板不存在' });
+    
+    db.productTemplates.splice(idx, 1);
+    await saveToRedis();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== 客户 API ====================
 
 // 获取所有客户

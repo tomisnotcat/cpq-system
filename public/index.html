@@ -715,8 +715,15 @@ createApp({
         },
         async deleteTemplate(id) {
             if (!confirm('确定要删除这个模板吗？')) return;
-            // Note: In production, add delete API endpoint
-            this.showToast('删除功能需要后端支持', 'info');
+            const res = await fetch('/api/templates/' + id, { method: 'DELETE' });
+            if (res.ok) {
+                this.showToast('模板已删除', 'success');
+                this.loadTemplates();
+                this.loadStats();
+            } else {
+                const err = await res.json();
+                this.showToast(err.error, 'error');
+            }
         },
         async saveTemplate() {
             if (!this.templateForm.name) {
