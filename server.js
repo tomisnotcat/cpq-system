@@ -305,6 +305,41 @@ app.post('/api/customers', async (req, res) => {
   }
 });
 
+// 更新客户
+app.put('/api/customers/:id', async (req, res) => {
+  try {
+    const customer = db.customers.find(c => c.id === parseInt(req.params.id));
+    if (!customer) return res.status(404).json({ error: '客户不存在' });
+    
+    const { name, company, email, phone, address } = req.body;
+    if (name) customer.name = name;
+    if (company !== undefined) customer.company = company;
+    if (email !== undefined) customer.email = email;
+    if (phone !== undefined) customer.phone = phone;
+    if (address !== undefined) customer.address = address;
+    
+    await saveToRedis();
+    res.json(customer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 删除客户
+app.delete('/api/customers/:id', async (req, res) => {
+  try {
+    const idx = db.customers.findIndex(c => c.id === parseInt(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: '客户不存在' });
+    
+    db.customers.splice(idx, 1);
+    await saveToRedis();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+});
+
 // ==================== 报价 API ====================
 
 // 计算价格
@@ -482,6 +517,31 @@ app.delete('/api/quotes/:id', async (req, res) => {
   db.quotes.splice(idx, 1);
   await saveToRedis();
   res.json({ success: true });
+});
+
+// 复制报价单
+app.post('/api/quotes/:id/copy', async (req, res) => {
+  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
+  if (!quote) return res.status(404).json({ error: '报价单不存在' });
+  
+  const newQuote = {
+    id: db.nextIds.quote++,
+    templateId: quote.templateId,
+    config: { ...quote.config },
+    configDetails: [...quote.configDetails],
+    customerId: quote.customerId,
+    customerName: quote.customerName,
+    totalPrice: quote.totalPrice,
+    validDays: 30,
+    notes: quote.notes,
+    status: 'draft',
+    created_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  };
+  
+  db.quotes.push(newQuote);
+  await saveToRedis();
+  res.json(newQuote);
 });
 
 // 辅助函数：计算价格
