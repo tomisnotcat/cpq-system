@@ -49,8 +49,11 @@
                 <button @click="currentView = 'customers'" :class="currentView === 'customers' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
                     <i class="fas fa-users"></i> 客户
                 </button>
-                <button @click="currentView = 'admin'" :class="currentView === 'admin' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
+                <button v-if="currentUser && currentUser.role === 'admin'" @click="currentView = 'admin'" :class="currentView === 'admin' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
                     <i class="fas fa-cog"></i> 管理
+                </button>
+                <button v-if="currentUser && currentUser.role === 'admin'" @click="currentView = 'analysis'" :class="currentView === 'analysis' ? 'text-indigo-600' : 'text-gray-600'" class="hover:text-indigo-600">
+                    <i class="fas fa-chart-line"></i> 分析
                 </button>
                 <template v-if="currentUser">
                     <span class="text-sm text-gray-500">{{ currentUser.name || currentUser.username }}</span>
