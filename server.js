@@ -1,27 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
-
-const generalLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  message: { error: '请求过于频繁，请稍后再试' }
-});
 
 const app = express();
 app.use(cors());
-app.use(generalLimiter);
 app.use(express.json({ limit: '2mb' }));
-
-// ==================== 临时禁用Redis，使用内存存储 ====================
-console.log('Using in-memory storage');
-
-async function saveToRedis() { /* no-op */ }
-async function loadFromRedis() { return null; }
 
 // ==================== 默认数据 ====================
 function generateDefaultData() {
-  // 产品模板 - 可配置的定制产品
   const productTemplates = [
     {
       id: 1,
@@ -48,18 +33,11 @@ function generateDefaultData() {
           { value: '2TB SSD', price: 2000 },
           { value: '4TB SSD', price: 5000 }
         ]},
-        { id: 'raid', name: 'RAID配置', type: 'select', required: false, options: [
-          { value: '无', price: 0 },
-          { value: 'RAID 1', price: 500 },
-          { value: 'RAID 5', price: 1000 },
-          { value: 'RAID 10', price: 2000 }
-        ]},
         { id: 'support', name: '维保服务', type: 'select', required: true, options: [
           { value: '基础', price: 0 },
           { value: '专业', price: 1000 },
           { value: '企业', price: 3000 }
-        ]},
-        { id: 'install', name: '安装服务', type: 'boolean', price: 500 }
+        ]}
       ]
     },
     {
@@ -72,21 +50,14 @@ function generateDefaultData() {
         { id: 'type', name: '项目类型', type: 'select', required: true, options: [
           { value: 'Web应用', price: 0 },
           { value: '移动App', price: 5000 },
-          { value: '桌面软件', price: 8000 },
-          { value: 'API接口', price: 3000 }
+          { value: '桌面软件', price: 8000 }
         ]},
         { id: 'pages', name: '页面数量', type: 'number', unit: '页', min: 1, pricePerUnit: 500 },
-        { id: 'users', name: '用户数', type: 'number', unit: '用户', min: 10, pricePerUnit: 100 },
-        { id: 'backend', name: '后端开发', type: 'boolean', price: 5000 },
-        { id: 'admin', name: '管理后台', type: 'boolean', price: 3000 },
-        { id: 'api', name: 'API对接', type: 'boolean', price: 2000 },
         { id: 'duration', name: '开发周期', type: 'select', required: true, options: [
           { value: '1个月', price: 0 },
           { value: '2个月', price: -2000 },
-          { value: '3个月', price: -5000 },
-          { value: '6个月', price: -10000 }
-        ]},
-        { id: 'maintain', name: '一年维保', type: 'boolean', price: 3000 }
+          { value: '3个月', price: -5000 }
+        ]}
       ]
     },
     {
@@ -103,408 +74,141 @@ function generateDefaultData() {
           { value: '企业型', price: 1999 }
         ]},
         { id: 'cpu', name: 'CPU', type: 'number', unit: '核', min: 1, max: 64, pricePerUnit: 50 },
-        { id: 'ram', name: '内存', type: 'number', unit: 'GB', min: 1, max: 128, pricePerUnit: 30 },
-        { id: 'disk', name: '硬盘', type: 'number', unit: 'GB', min: 20, max: 2000, pricePerUnit: 0.5 },
-        { id: 'bandwidth', name: '带宽', type: 'select', required: true, options: [
-          { value: '1Mbps', price: 0 },
-          { value: '5Mbps', price: 100 },
-          { value: '10Mbps', price: 300 },
-          { value: '100Mbps', price: 2000 }
-        ]},
-        { id: 'backup', name: '自动备份', type: 'boolean', price: 99 },
-        { id: 'ssl', name: 'SSL证书', type: 'boolean', price: 0 },
-        { id: 'cdn', name: 'CDN加速', type: 'boolean', price: 199 },
-        { id: 'monitor', name: '监控服务', type: 'boolean', price: 49 }
-      ]
-    },
-    {
-      id: 4,
-      name: '网站制作',
-      description: '企业官网/商城网站建设',
-      basePrice: 3000,
-      category: '服务',
-      attributes: [
-        { id: 'type', name: '网站类型', type: 'select', required: true, options: [
-          { value: '企业官网', price: 0 },
-          { value: '商城网站', price: 5000 },
-          { value: '营销落地页', price: -1000 },
-          { value: '门户资讯', price: 8000 }
-        ]},
-        { id: 'pages', name: '页面数量', type: 'number', unit: '页', min: 3, pricePerUnit: 300 },
-        { id: 'design', name: '设计等级', type: 'select', required: true, options: [
-          { value: '模板套用', price: 0 },
-          { value: '定制设计', price: 2000 },
-          { value: '高端定制', price: 8000 }
-        ]},
-        { id: 'mobile', name: '移动端适配', type: 'boolean', price: 0 },
-        { id: 'seo', name: 'SEO优化', type: 'boolean', price: 1000 },
-        { id: 'cms', name: 'CMS后台', type: 'boolean', price: 2000 },
-        { id: 'multilang', name: '多语言', type: 'boolean', price: 1500 },
-        { id: '动画', name: '交互动画', type: 'boolean', price: 2000 }
+        { id: 'ram', name: '内存', type: 'number', unit: 'GB', min: 1, max: 128, pricePerUnit: 30 }
       ]
     }
   ];
 
-  // 客户
   const customers = [
     { id: 1, name: '演示客户', company: '示例公司', email: 'demo@cpq.com', phone: '13800138000', address: '北京市', created_at: new Date().toISOString() }
   ];
 
-  // 用户
   const users = [
-    { id: 1, username: 'admin', password: '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.hxBV7H1M5Fzp.xJ5Fy', role: 'admin', name: '管理员', email: 'admin@cpq.com', created_at: new Date().toISOString() },
-    { id: 2, username: 'user', password: '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.hxBV7H1M5Fzp.xJ5Fy', role: 'user', name: '普通用户', email: 'user@cpq.com', created_at: new Date().toISOString() }
+    { id: 1, username: 'admin', password: 'admin123', name: '管理员', role: 'admin', created_at: new Date().toISOString() }
   ];
 
-  // 报价单
   const quotes = [];
 
-  return { productTemplates, customers, users, quotes, nextIds: { template: 5, customer: 2, user: 3, quote: 1 } };
+  return { productTemplates, customers, users, quotes, nextIds: { template: 4, customer: 2, user: 2, quote: 1 } };
 }
 
 let db = generateDefaultData();
 
-// 使用内存存储，无需初始化
+// ==================== 用户 API ====================
+
+app.post('/api/register', (req, res) => {
+  const { username, password, name, email } = req.body;
+  if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  if (db.users.find(u => u.username === username)) return res.status(400).json({ error: '用户名已存在' });
+  
+  const user = {
+    id: db.nextIds.user++,
+    username,
+    password,
+    name: name || username,
+    email: email || '',
+    role: 'user',
+    created_at: new Date().toISOString()
+  };
+  db.users.push(user);
+  res.json({ success: true, user: { id: user.id, username: user.username, name: user.name, role: user.role } });
+});
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  const user = db.users.find(u => u.username === username && u.password === password);
+  if (!user) return res.status(401).json({ error: '用户名或密码错误' });
+  res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
+});
 
 // ==================== 产品模板 API ====================
 
-// 获取所有产品模板
 app.get('/api/templates', (req, res) => {
   res.json(db.productTemplates);
 });
 
-// 获取单个模板
 app.get('/api/templates/:id', (req, res) => {
   const template = db.productTemplates.find(t => t.id === parseInt(req.params.id));
   if (!template) return res.status(404).json({ error: '模板不存在' });
   res.json(template);
 });
 
-// 创建产品模板
-app.post('/api/templates', async (req, res) => {
-  try {
-    const { name, description, basePrice, category, attributes } = req.body;
-    if (!name) return res.status(400).json({ error: '模板名称不能为空' });
-    
-    const template = {
-      id: db.nextIds.template++,
-      name,
-      description: description || '',
-      basePrice: basePrice || 0,
-      category: category || '其他',
-      attributes: attributes || []
-    };
-    db.productTemplates.push(template);
-    
-    res.json(template);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.post('/api/templates', (req, res) => {
+  const { name, description, basePrice, category, attributes } = req.body;
+  if (!name) return res.status(400).json({ error: '模板名称不能为空' });
+  
+  const template = {
+    id: db.nextIds.template++,
+    name,
+    description: description || '',
+    basePrice: basePrice || 0,
+    category: category || '其他',
+    attributes: attributes || []
+  };
+  db.productTemplates.push(template);
+  res.json(template);
 });
 
-// 删除产品模板
-app.delete('/api/templates/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const idx = db.productTemplates.findIndex(t => t.id === id);
-    if (idx === -1) return res.status(404).json({ error: '模板不存在' });
-    
-    db.productTemplates.splice(idx, 1);
-    
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.delete('/api/templates/:id', (req, res) => {
+  const idx = db.productTemplates.findIndex(t => t.id === parseInt(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: '模板不存在' });
+  db.productTemplates.splice(idx, 1);
+  res.json({ success: true });
 });
 
 // ==================== 客户 API ====================
 
-// 获取所有客户
 app.get('/api/customers', (req, res) => {
   const { search } = req.query;
   let customers = db.customers;
   if (search) {
     const s = search.toLowerCase();
-    customers = customers.filter(c => 
-      c.name.toLowerCase().includes(s) || 
-      c.company.toLowerCase().includes(s) ||
-      c.email.toLowerCase().includes(s)
-    );
+    customers = customers.filter(c => c.name.toLowerCase().includes(s) || c.company.toLowerCase().includes(s));
   }
   res.json(customers);
 });
 
-// 获取单个客户
-app.get('/api/customers/:id', (req, res) => {
-  const customer = db.customers.find(c => c.id === parseInt(req.params.id));
-  if (!customer) return res.status(404).json({ error: '客户不存在' });
+app.post('/api/customers', (req, res) => {
+  const { name, company, email, phone, address } = req.body;
+  if (!name) return res.status(400).json({ error: '客户名称不能为空' });
+  
+  const customer = {
+    id: db.nextIds.customer++,
+    name,
+    company: company || '',
+    email: email || '',
+    phone: phone || '',
+    address: address || '',
+    created_at: new Date().toISOString()
+  };
+  db.customers.push(customer);
   res.json(customer);
 });
 
-// 创建客户
-app.post('/api/customers', async (req, res) => {
-  try {
-    const { name, company, email, phone, address } = req.body;
-    if (!name) return res.status(400).json({ error: '客户名称不能为空' });
-    
-    const customer = {
-      id: db.nextIds.customer++,
-      name,
-      company: company || '',
-      email: email || '',
-      phone: phone || '',
-      address: address || '',
-      created_at: new Date().toISOString()
-    };
-    db.customers.push(customer);
-    
-    res.json(customer);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.put('/api/customers/:id', (req, res) => {
+  const customer = db.customers.find(c => c.id === parseInt(req.params.id));
+  if (!customer) return res.status(404).json({ error: '客户不存在' });
+  
+  const { name, company, email, phone, address } = req.body;
+  if (name) customer.name = name;
+  if (company !== undefined) customer.company = company;
+  if (email !== undefined) customer.email = email;
+  if (phone !== undefined) customer.phone = phone;
+  if (address !== undefined) customer.address = address;
+  
+  res.json(customer);
 });
 
-// 更新客户
-app.put('/api/customers/:id', async (req, res) => {
-  try {
-    const customer = db.customers.find(c => c.id === parseInt(req.params.id));
-    if (!customer) return res.status(404).json({ error: '客户不存在' });
-    
-    const { name, company, email, phone, address } = req.body;
-    if (name) customer.name = name;
-    if (company !== undefined) customer.company = company;
-    if (email !== undefined) customer.email = email;
-    if (phone !== undefined) customer.phone = phone;
-    if (address !== undefined) customer.address = address;
-    
-    
-    res.json(customer);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 删除客户
-app.delete('/api/customers/:id', async (req, res) => {
-  try {
-    const idx = db.customers.findIndex(c => c.id === parseInt(req.params.id));
-    if (idx === -1) return res.status(404).json({ error: '客户不存在' });
-    
-    db.customers.splice(idx, 1);
-    
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-});
-
-// ==================== 报价 API ====================
-
-// 计算价格
-app.post('/api/calculate', (req, res) => {
-  try {
-    const { templateId, config } = req.body;
-    const template = db.productTemplates.find(t => t.id === templateId);
-    if (!template) return res.status(404).json({ error: '模板不存在' });
-
-    let totalPrice = template.basePrice || 0;
-    const configDetails = [];
-
-    for (const attr of template.attributes) {
-      const value = config[attr.id];
-      if (value === undefined || value === null || value === '') continue;
-
-      let attrPrice = 0;
-
-      if (attr.type === 'select' && attr.options) {
-        const option = attr.options.find(o => o.value === value);
-        if (option) {
-          attrPrice = option.price || 0;
-          configDetails.push({ 
-            attribute: attr.name, 
-            value, 
-            price: attrPrice 
-          });
-        }
-      } else if (attr.type === 'number' && attr.pricePerUnit) {
-        const num = parseFloat(value) || 0;
-        const min = attr.min || 0;
-        const effectiveNum = Math.max(0, num - min);
-        attrPrice = effectiveNum * attr.pricePerUnit;
-        configDetails.push({ 
-          attribute: attr.name, 
-          value: `${value}${attr.unit || ''}`, 
-          price: attrPrice 
-        });
-      } else if (attr.type === 'boolean' && value === true) {
-        attrPrice = attr.price || 0;
-        configDetails.push({ 
-          attribute: attr.name, 
-          value: '是', 
-          price: attrPrice 
-        });
-      }
-
-      totalPrice += attrPrice;
-    }
-
-    res.json({
-      templateId,
-      templateName: template.name,
-      basePrice: template.basePrice || 0,
-      config: configDetails,
-      totalPrice,
-      currency: 'CNY'
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 生成报价单
-app.post('/api/quotes', async (req, res) => {
-  try {
-    const { templateId, config, customerId, customerName, validDays, notes } = req.body;
-    
-    // 计算价格
-    const { totalPrice, config: configDetails } = await calculatePrice(templateId, config);
-    
-    const quote = {
-      id: db.nextIds.quote++,
-      templateId,
-      config,
-      configDetails,
-      customerId: customerId || null,
-      customerName: customerName || '',
-      totalPrice,
-      validDays: validDays || 30,
-      notes: notes || '',
-      status: 'draft',
-      created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + (validDays || 30) * 24 * 60 * 60 * 1000).toISOString()
-    };
-    
-    db.quotes.push(quote);
-    
-    res.json(quote);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 获取报价单列表
-app.get('/api/quotes', (req, res) => {
-  const { status, customerId } = req.query;
-  let quotes = db.quotes;
-  
-  if (status) {
-    quotes = quotes.filter(q => q.status === status);
-  }
-  if (customerId) {
-    quotes = quotes.filter(q => q.customerId === parseInt(customerId));
-  }
-  
-  // 按创建时间倒序
-  quotes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  
-  res.json(quotes);
-});
-
-// 获取单个报价单
-app.get('/api/quotes/:id', (req, res) => {
-  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
-  if (!quote) return res.status(404).json({ error: '报价单不存在' });
-  
-  // 填充模板信息
-  const template = db.productTemplates.find(t => t.id === quote.templateId);
-  quote.template = template;
-  
-  // 填充客户信息
-  if (quote.customerId) {
-    const customer = db.customers.find(c => c.id === quote.customerId);
-    quote.customer = customer;
-  }
-  
-  res.json(quote);
-});
-
-// 更新报价单状态
-app.put('/api/quotes/:id/status', async (req, res) => {
-  const { status } = req.body;
-  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
-  if (!quote) return res.status(404).json({ error: '报价单不存在' });
-  
-  quote.status = status;
-  quote.updated_at = new Date().toISOString();
-  
-  
-  res.json(quote);
-});
-
-// 更新报价单
-app.put('/api/quotes/:id', async (req, res) => {
-  const { customerName, validDays, notes, config } = req.body;
-  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
-  if (!quote) return res.status(404).json({ error: '报价单不存在' });
-  
-  if (customerName !== undefined) quote.customerName = customerName;
-  if (validDays !== undefined) {
-    quote.validDays = validDays;
-    quote.expires_at = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString();
-  }
-  if (notes !== undefined) quote.notes = notes;
-  if (config) {
-    quote.config = config;
-    // 重新计算价格
-    const { totalPrice, configDetails } = await calculatePrice(quote.templateId, config);
-    quote.totalPrice = totalPrice;
-    quote.configDetails = configDetails;
-  }
-  
-  quote.updated_at = new Date().toISOString();
-  
-  
-  res.json(quote);
-});
-
-// 删除报价单
-app.delete('/api/quotes/:id', async (req, res) => {
-  const idx = db.quotes.findIndex(q => q.id === parseInt(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: '报价单不存在' });
-  
-  db.quotes.splice(idx, 1);
-  
+app.delete('/api/customers/:id', (req, res) => {
+  const idx = db.customers.findIndex(c => c.id === parseInt(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: '客户不存在' });
+  db.customers.splice(idx, 1);
   res.json({ success: true });
 });
 
-// 复制报价单
-app.post('/api/quotes/:id/copy', async (req, res) => {
-  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
-  if (!quote) return res.status(404).json({ error: '报价单不存在' });
-  
-  const newQuote = {
-    id: db.nextIds.quote++,
-    templateId: quote.templateId,
-    config: { ...quote.config },
-    configDetails: [...quote.configDetails],
-    customerId: quote.customerId,
-    customerName: quote.customerName,
-    totalPrice: quote.totalPrice,
-    validDays: 30,
-    notes: quote.notes,
-    status: 'draft',
-    created_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-  };
-  
-  db.quotes.push(newQuote);
-  
-  res.json(newQuote);
-});
+// ==================== 价格计算 ====================
 
-// 辅助函数：计算价格
-async function calculatePrice(templateId, config) {
+function calculatePrice(templateId, config) {
   const template = db.productTemplates.find(t => t.id === templateId);
   if (!template) throw new Error('模板不存在');
 
@@ -540,70 +244,141 @@ async function calculatePrice(templateId, config) {
   return { totalPrice, configDetails };
 }
 
-// ==================== 统计 API ====================
-
-app.get('/api/stats', (req, res) => {
-
-// 登录
-app.post('/api/login', async (req, res) => {
+app.post('/api/calculate', (req, res) => {
   try {
-    const { username, password } = req.body;
-    const user = db.users.find(u => u.username === username);
-    if (!user) return res.status(401).json({ error: '用户名或密码错误' });
-    
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: '用户名或密码错误' });
-    
-    res.json({ 
-      id: user.id, 
-      username: user.username, 
-      name: user.name, 
-      role: user.role,
-      email: user.email 
+    const { templateId, config } = req.body;
+    const result = calculatePrice(templateId, config);
+    const template = db.productTemplates.find(t => t.id === templateId);
+    res.json({
+      templateId,
+      templateName: template?.name,
+      basePrice: template?.basePrice || 0,
+      config: result.configDetails,
+      totalPrice: result.totalPrice,
+      currency: 'CNY'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 注册
-app.post('/api/register', async (req, res) => {
-  try {
-    const { username, password, name, email } = req.body;
-    if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
-    
-    if (db.users.find(u => u.username === username)) {
-      return res.status(400).json({ error: '用户名已存在' });
-    }
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = {
-      id: db.nextIds.user++,
-      username,
-      password: hashedPassword,
-      role: 'user',
-      name: name || username,
-      email: email || '',
-      created_at: new Date().toISOString()
-    };
-    db.users.push(user);
-    
-    res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// ==================== 报价单 API ====================
+
+app.post('/api/quotes', (req, res) => {
+  const { templateId, config, customerId, customerName, validDays, notes } = req.body;
+  
+  const { totalPrice, configDetails } = calculatePrice(templateId, config);
+  
+  const quote = {
+    id: db.nextIds.quote++,
+    templateId,
+    config,
+    configDetails,
+    customerId: customerId || null,
+    customerName: customerName || '',
+    totalPrice,
+    validDays: validDays || 30,
+    notes: notes || '',
+    status: 'draft',
+    created_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + (validDays || 30) * 24 * 60 * 60 * 1000).toISOString()
+  };
+  
+  db.quotes.push(quote);
+  res.json(quote);
 });
 
-// 获取当前用户信息
-app.get('/api/me', (req, res) => {
-  const username = req.headers['x-username'];
-  if (!username) return res.status(401).json({ error: '未登录' });
+app.get('/api/quotes', (req, res) => {
+  const { status, customerId } = req.query;
+  let quotes = db.quotes;
   
-  const user = db.users.find(u => u.username === username);
-  if (!user) return res.status(404).json({ error: '用户不存在' });
+  if (status) quotes = quotes.filter(q => q.status === status);
+  if (customerId) quotes = quotes.filter(q => q.customerId === parseInt(customerId));
   
-  res.json({ id: user.id, username: user.username, name: user.name, role: user.role, email: user.email });
+  quotes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  
+  res.json(quotes);
 });
+
+app.get('/api/quotes/:id', (req, res) => {
+  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
+  if (!quote) return res.status(404).json({ error: '报价单不存在' });
+  
+  const template = db.productTemplates.find(t => t.id === quote.templateId);
+  quote.template = template;
+  
+  if (quote.customerId) {
+    const customer = db.customers.find(c => c.id === quote.customerId);
+    quote.customer = customer;
+  }
+  
+  res.json(quote);
+});
+
+app.put('/api/quotes/:id/status', (req, res) => {
+  const { status } = req.body;
+  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
+  if (!quote) return res.status(404).json({ error: '报价单不存在' });
+  
+  quote.status = status;
+  quote.updated_at = new Date().toISOString();
+  
+  res.json(quote);
+});
+
+app.put('/api/quotes/:id', (req, res) => {
+  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
+  if (!quote) return res.status(404).json({ error: '报价单不存在' });
+  
+  const { customerName, validDays, notes, config } = req.body;
+  if (customerName !== undefined) quote.customerName = customerName;
+  if (validDays !== undefined) {
+    quote.validDays = validDays;
+    quote.expires_at = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString();
+  }
+  if (notes !== undefined) quote.notes = notes;
+  if (config) {
+    quote.config = config;
+    const result = calculatePrice(quote.templateId, config);
+    quote.totalPrice = result.totalPrice;
+    quote.configDetails = result.configDetails;
+  }
+  
+  quote.updated_at = new Date().toISOString();
+  res.json(quote);
+});
+
+app.delete('/api/quotes/:id', (req, res) => {
+  const idx = db.quotes.findIndex(q => q.id === parseInt(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: '报价单不存在' });
+  db.quotes.splice(idx, 1);
+  res.json({ success: true });
+});
+
+app.post('/api/quotes/:id/copy', (req, res) => {
+  const quote = db.quotes.find(q => q.id === parseInt(req.params.id));
+  if (!quote) return res.status(404).json({ error: '报价单不存在' });
+  
+  const newQuote = {
+    id: db.nextIds.quote++,
+    templateId: quote.templateId,
+    config: { ...quote.config },
+    configDetails: [...quote.configDetails],
+    customerId: quote.customerId,
+    customerName: quote.customerName,
+    totalPrice: quote.totalPrice,
+    validDays: 30,
+    notes: quote.notes,
+    status: 'draft',
+    created_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  };
+  
+  db.quotes.push(newQuote);
+  res.json(newQuote);
+});
+
+// ==================== 统计 API ====================
 
 app.get('/api/stats', (req, res) => {
   res.json({
