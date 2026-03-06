@@ -1,9 +1,62 @@
 const express = require('express');
 const cors = require('cors');
+const { Redis } = require('@upstash/redis');
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
+
+// Redis 配置
+let redis = null;
+try {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+    console.log('Redis configured');
+  }
+} catch (e) {
+  console.log('Redis not available:', e.message);
+}
+
+async function saveDb(data) {
+  if (!redis) return;
+  try {
+    await redis.set('cpq_db', JSON.stringify(data), { EX: 86400 });
+  } catch (e) {
+    console.log('Save failed:', e.message);
+  }
+}
+
+async function loadDb() {
+  if (!redis) return null;
+  try {
+    const data = await redis.get('cpq_db');
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    console.log('Load failed:', e.message);
+    return null;
+  }
+}
+
+// 启动时加载数据
+let db = null;
+let ready = false;
+
+async function init() {
+  const saved = await loadDb();
+  if (saved) {
+    db = saved;
+    console.log('Loaded from Redis');
+  } else {
+    db = generateDefaultData();
+    console.log('Using default data');
+  }
+  ready = true;
+}
+
+init();
 
 // ==================== 默认数据 ====================
 function generateDefaultData() {
