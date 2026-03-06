@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 
 const generalLimiter = rateLimit({
@@ -14,48 +13,11 @@ app.use(cors());
 app.use(generalLimiter);
 app.use(express.json({ limit: '2mb' }));
 
-// ==================== Redis 持久化 ====================
-let redis = null;
-let useRedis = false;
+// ==================== 临时禁用Redis，使用内存存储 ====================
+console.log('Using in-memory storage');
 
-async function initRedis() {
-  console.log('UPSTASH_REDIS_REST_URL:', process.env.UPSTASH_REDIS_REST_URL ? 'set' : 'not set');
-  console.log('UPSTASH_REDIS_REST_TOKEN:', process.env.UPSTASH_REDIS_REST_TOKEN ? 'set' : 'not set');
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    try {
-      const { Redis } = require('@upstash/redis');
-      redis = new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      });
-      await redis.ping();
-      useRedis = true;
-      console.log('Redis connected!');
-    } catch (e) {
-      console.log('Redis init failed:', e.message);
-    }
-  }
-}
-
-async function saveToRedis() {
-  if (!useRedis || !redis) return;
-  try {
-    await redis.set('cpq_db', JSON.stringify(db), { EX: 86400 });
-  } catch (e) {
-    console.error('Save failed:', e.message);
-  }
-}
-
-async function loadFromRedis() {
-  if (!useRedis || !redis) return null;
-  try {
-    const data = await redis.get('cpq_db');
-    return data ? JSON.parse(data) : null;
-  } catch (e) {
-    console.error('Load failed:', e.message);
-    return null;
-  }
-}
+async function saveToRedis() { /* no-op */ }
+async function loadFromRedis() { return null; }
 
 // ==================== 默认数据 ====================
 function generateDefaultData() {
@@ -202,26 +164,7 @@ function generateDefaultData() {
 
 let db = generateDefaultData();
 
-// 尝试加载 Redis，如果失败则使用默认数据
-initRedis().then(() => {
-  loadFromRedis().then(savedDb => {
-    if (savedDb) {
-      // 确保数据结构完整
-      if (!savedDb.productTemplates) savedDb.productTemplates = db.productTemplates;
-      if (!savedDb.customers) savedDb.customers = db.customers;
-      if (!savedDb.users) savedDb.users = db.users;
-      if (!savedDb.quotes) savedDb.quotes = db.quotes;
-      if (!savedDb.nextIds) savedDb.nextIds = db.nextIds;
-      db = savedDb;
-      console.log('Loaded data from Redis');
-    }
-  });
-}).catch(err => {
-  console.log('Redis init failed, using default data:', err.message);
-});
-
-setInterval(() => { if (useRedis) saveToRedis(); }, 30000);
-process.on('SIGTERM', () => { if (useRedis) saveToRedis(); });
+// 使用内存存储，无需初始化
 
 // ==================== 产品模板 API ====================
 
@@ -252,7 +195,7 @@ app.post('/api/templates', async (req, res) => {
       attributes: attributes || []
     };
     db.productTemplates.push(template);
-    await saveToRedis();
+    
     res.json(template);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -267,7 +210,7 @@ app.delete('/api/templates/:id', async (req, res) => {
     if (idx === -1) return res.status(404).json({ error: '模板不存在' });
     
     db.productTemplates.splice(idx, 1);
-    await saveToRedis();
+    
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -314,7 +257,7 @@ app.post('/api/customers', async (req, res) => {
       created_at: new Date().toISOString()
     };
     db.customers.push(customer);
-    await saveToRedis();
+    
     res.json(customer);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -334,7 +277,7 @@ app.put('/api/customers/:id', async (req, res) => {
     if (phone !== undefined) customer.phone = phone;
     if (address !== undefined) customer.address = address;
     
-    await saveToRedis();
+    
     res.json(customer);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -348,7 +291,7 @@ app.delete('/api/customers/:id', async (req, res) => {
     if (idx === -1) return res.status(404).json({ error: '客户不存在' });
     
     db.customers.splice(idx, 1);
-    await saveToRedis();
+    
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -443,7 +386,7 @@ app.post('/api/quotes', async (req, res) => {
     };
     
     db.quotes.push(quote);
-    await saveToRedis();
+    
     res.json(quote);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -494,7 +437,7 @@ app.put('/api/quotes/:id/status', async (req, res) => {
   
   quote.status = status;
   quote.updated_at = new Date().toISOString();
-  await saveToRedis();
+  
   
   res.json(quote);
 });
@@ -520,7 +463,7 @@ app.put('/api/quotes/:id', async (req, res) => {
   }
   
   quote.updated_at = new Date().toISOString();
-  await saveToRedis();
+  
   
   res.json(quote);
 });
@@ -531,7 +474,7 @@ app.delete('/api/quotes/:id', async (req, res) => {
   if (idx === -1) return res.status(404).json({ error: '报价单不存在' });
   
   db.quotes.splice(idx, 1);
-  await saveToRedis();
+  
   res.json({ success: true });
 });
 
@@ -556,7 +499,7 @@ app.post('/api/quotes/:id/copy', async (req, res) => {
   };
   
   db.quotes.push(newQuote);
-  await saveToRedis();
+  
   res.json(newQuote);
 });
 
@@ -644,7 +587,7 @@ app.post('/api/register', async (req, res) => {
       created_at: new Date().toISOString()
     };
     db.users.push(user);
-    await saveToRedis();
+    
     res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
   } catch (err) {
     res.status(500).json({ error: err.message });
